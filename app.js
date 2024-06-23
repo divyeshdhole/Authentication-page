@@ -7,6 +7,10 @@ const { stringify } = require("querystring");
 const { StringDecoder } = require("string_decoder");
 const encrypt = require("mongoose-encryption");
 const app = express();
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
+
+
 app.use(express.static("public"));
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({
@@ -20,8 +24,7 @@ const userSchema = new mongoose.Schema({
     email: String,
     password: String
 })
-const secret = "abcdefghijk";
-userSchema.plugin(encrypt, {secret: process.env.SECRET, encryptedFields: ["password"]});
+
 const User = mongoose.model("User", userSchema);
 
 
@@ -35,17 +38,20 @@ app.get("/register", function(req, res) {
 })
 
 app.post("/register", function(req, res) {
-    const newUser = new User({
-        email: req.body.username,
-        password: req.body.password
-    });
-    newUser.save()
-    .then(function() {
-        res.render("secrets");
+    bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+        const newUser = new User({
+            email: req.body.username,
+            password: hash
+        });
+        newUser.save()
+        .then(function() {
+            res.render("secrets");
+        })
+        .catch(function(err) {
+            res.render(err);
+        });
     })
-    .catch(function(err) {
-        res.render(err);
-    });
+    
 })
 
 
@@ -56,18 +62,21 @@ app.get("/login", function(req, res) {
 app.post("/login", function(req, res) {
     const username = req.body.username;
     const password = req.body.password;
-
+    
     User.findOne({email: username})
     .then(function(user) {
-            if(user.password == password) {
-                // console.log("Rendering!");
-                res.render("secrets");
-            }
-            else {
-                res.send("Not Match!");
+            bcrypt.compare(password, user.password, function(err, result) {
+                if (err) {
+                    res.send("Error comparing passwords!"); // Handle bcrypt error
+                }
+                else if(result === true)
+                    res.render("secrets");
+                    
+            })
+            
         }
         
-    })
+    )
     .catch(function(err) {
         res.send(err);
     })
